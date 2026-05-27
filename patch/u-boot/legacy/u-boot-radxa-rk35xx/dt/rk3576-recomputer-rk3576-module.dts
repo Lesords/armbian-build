@@ -8,6 +8,7 @@
 #include "rk3576.dtsi"
 #include "rk3576-u-boot.dtsi"
 #include <dt-bindings/input/input.h>
+#include "rockchip/rk3576-rk806.dtsi"
 
 / {
 	model = "reComputer RK3576 Module";
@@ -21,6 +22,39 @@
 	 * The reComputer board has no physical volume-up button; this node was
 	 * inherited from the reference design and is not needed.
 	 */
+
+	/* Board regulators required by rk3576-rk806.dtsi */
+	vcc_sys: vcc5v0-sys {
+		u-boot,dm-spl;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+	};
+
+	vcc_2v0_pldo_s3: vcc-2v0-pldo-s3 {
+		u-boot,dm-spl;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_2v0_pldo_s3";
+		regulator-boot-on;
+		regulator-always-on;
+		regulator-min-microvolt = <2000000>;
+		regulator-max-microvolt = <2000000>;
+		vin-supply = <&vcc_sys>;
+	};
+
+	vcc_1v1_nldo_s3: vcc-1v1-nldo-s3 {
+		u-boot,dm-spl;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_1v1_nldo_s3";
+		regulator-boot-on;
+		regulator-always-on;
+		regulator-min-microvolt = <1100000>;
+		regulator-max-microvolt = <1100000>;
+		vin-supply = <&vcc_sys>;
+	};
 
 	vcc3v3_pcie: vcc3v3-pcie {
 		u-boot,dm-pre-reloc;
@@ -52,6 +86,12 @@
 
 };
 
+/* PMIC on I2C1 — enabled by rk3576-rk806.dtsi, add SPL tags */
+&i2c1 {
+	u-boot,dm-spl;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1m0_xfer>;
+};
 
 &i2c4{
 	status = "okay";
@@ -79,14 +119,12 @@
 };
 
 &sdhci {
-	status = "disabled";
+	u-boot,dm-pre-reloc;
+	status = "okay";
 };
 
 &sfc0 {
-	status = "okay";
-	u-boot,dm-pre-reloc;
-	pinctrl-names = "default";
-	pinctrl-0 = <&fspi0_pins>;
+	status = "disabled";
 };
 
 &sdmmc {
@@ -116,11 +154,6 @@
 	status = "okay";
 };
 
-&spi_nor {
-	status = "okay";
-	u-boot,dm-pre-reloc;
-};
-
 
 &pinctrl {
 	u-boot,dm-pre-reloc;
@@ -140,6 +173,18 @@
 		};
 	};
 
+	i2c1 {
+		u-boot,dm-spl;
+		i2c1m0_xfer: i2c1m0-xfer {
+			u-boot,dm-spl;
+			rockchip,pins =
+				/* i2c1_scl_m0 */
+				<0 RK_PB2 11 &pcfg_pull_none_smt>,
+				/* i2c1_sda_m0 */
+				<0 RK_PB3 11 &pcfg_pull_none_smt>;
+		};
+	};
+
 	pcie {
 		u-boot,dm-pre-reloc;
 		pcie_pwr_en: pcie-pwr-en {
@@ -153,32 +198,4 @@
 			rockchip,pins = <2 RK_PA7 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
-
-		/delete-node/ fspi0;
-	fspi0 {
-		u-boot,dm-spl;
-		fspi0_pins: fspi0-pins {
-			u-boot,dm-spl;
-			rockchip,pins =
-				/* fspi0_clk */
-				<1 RK_PB1 2 &pcfg_pull_none>,
-				/* fspi0_d0 */
-				<1 RK_PA0 2 &pcfg_pull_none>,
-				/* fspi0_d1 */
-				<1 RK_PA1 2 &pcfg_pull_none>,
-				/* fspi0_d2 */
-				<1 RK_PA2 2 &pcfg_pull_none>,
-				/* fspi0_d3 */
-				<1 RK_PA3 2 &pcfg_pull_none>;
-		};
-
-		fspi0_csn0: fspi0-csn0 {
-			u-boot,dm-spl;
-			rockchip,pins =
-				/* fspi0_csn0 */
-				<1 RK_PB3 2 &pcfg_pull_none>;
-		};
-	};
-
-
 };
