@@ -59,7 +59,12 @@ function post_install_kernel_debs__activate_dkms() {
 
 function post_customize_image__rm_aptconf() {
     display_alert "Removing apt.conf file"
-    run_host_command_logged "rm ${SDCARD}/etc/apt/apt.conf"
+    if [[ -f "${SDCARD}"/etc/apt/apt.conf ]]; then
+        run_host_command_logged "rm ${SDCARD}/etc/apt/apt.conf"
+        display_alert "Removed apt.conf"
+    else
+        display_alert "apt.conf not present, nothing to remove"
+    fi
     chroot_sdcard_apt_get_update || true
     display_alert "Removed apt.conf"
 }
