@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# ====================== 配置部分 ======================
+# 16个LED的设备路径（需与实际一致！）
+LED_PATHS=(
+    "/sys/class/leds/badge:matrix:led1_a"
+    "/sys/class/leds/badge:matrix:led1_b"
+    "/sys/class/leds/badge:matrix:led1_c"
+    "/sys/class/leds/badge:matrix:led1_d"
+    "/sys/class/leds/badge:matrix:led1_e"
+    "/sys/class/leds/badge:matrix:led1_f"
+    "/sys/class/leds/badge:matrix:led1_g"
+    "/sys/class/leds/badge:matrix:led2_a"
+    "/sys/class/leds/badge:matrix:led2_b"
+    "/sys/class/leds/badge:matrix:led2_c"
+    "/sys/class/leds/badge:matrix:led2_d"
+    "/sys/class/leds/badge:matrix:led2_e"
+    "/sys/class/leds/badge:matrix:led2_f"
+    "/sys/class/leds/badge:matrix:led2_g"
+)
+
+# 延时时间（秒）：控制“亮→灭”的间隔
+DELAY=0.2
+
+# 闪烁次数（所有LED一起闪烁的次数）
+FLASH_TIMES=3
+
+
+# ====================== 函数：控制单个LED（依次点亮/熄灭） ======================
+control_single_led() {
+    local led_path=$1
+    local brightness_file="${led_path}/brightness"
+
+    # 点亮LED
+    echo 255 > "$brightness_file"
+    sleep $DELAY
+
+    # 熄灭LED
+    echo 0 > "$brightness_file"
+    sleep $DELAY
+}
+
+
+# ====================== 函数：所有LED一起闪烁 ======================
+flash_all_leds() {
+    # 点亮所有LED
+    for led in "${LED_PATHS[@]}"; do
+        echo 255 > "${led}/brightness"
+    done
+    sleep $DELAY
+
+    # 熄灭所有LED
+    for led in "${LED_PATHS[@]}"; do
+        echo 0 > "${led}/brightness"
+    done
+    sleep $DELAY
+}
+
+
+# ====================== 主逻辑：先“依次点亮/熄灭”，再“全部闪烁” ======================
+echo "=== 开始：逐个LED依次点亮、熄灭 ==="
+for led in "${LED_PATHS[@]}"; do
+    control_single_led "$led"
+done
+
+echo "=== 开始：所有LED一起闪烁（共${FLASH_TIMES}次） ==="
+for ((i=0; i<FLASH_TIMES; i++)); do
+    flash_all_leds
+done
+
+echo "=== LED测试完成！ ==="

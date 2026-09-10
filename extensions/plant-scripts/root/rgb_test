@@ -1,0 +1,54 @@
+#!/bin/bash
+# AM62L RGB LED测试脚本
+
+echo "开始RGB LED测试..."
+
+# 测试红色LED
+echo "测试红色LED..."
+cd /sys/class/leds/rgb:red
+echo 255 > ./brightness
+sleep 1
+echo 0 > ./brightness
+sleep 0.5
+
+# 测试绿色LED  
+echo "测试绿色LED..."
+cd /sys/class/leds/rgb:green
+echo 255 > ./brightness
+sleep 1
+echo 0 > ./brightness
+sleep 0.5
+
+# 测试蓝色LED
+echo "测试蓝色LED..."
+cd /sys/class/leds/rgb:blue
+echo 255 > ./brightness
+sleep 1
+echo 0 > ./brightness
+sleep 0.5
+
+# 彩虹效果测试
+echo "彩虹效果测试..."
+for i in red green blue; do
+    cd /sys/class/leds/rgb:$i
+    echo 255 > ./brightness
+    sleep 0.3
+    echo 0 > ./brightness
+done
+
+# 同时点亮所有LED
+echo "同时点亮所有LED..."
+for i in red green blue; do
+    cd /sys/class/leds/rgb:$i
+    echo 255 > ./brightness
+done
+sleep 2
+
+# 关闭所有LED
+echo "关闭所有LED..."
+for i in red green blue; do
+    cd /sys/class/leds/rgb:$i
+    echo 0 > ./brightness
+done
+
+echo "RGB LED测试完成！"

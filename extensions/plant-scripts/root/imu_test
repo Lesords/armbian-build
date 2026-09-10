@@ -1,0 +1,37 @@
+
+#!/bin/bash
+
+# 简单IMU测试脚本
+# 持续读取加速度计数据，按Ctrl+C退出
+
+echo "开始IMU加速度计测试..."
+echo "设备路径: /sys/bus/iio/devices/iio:device1"
+echo "按 Ctrl+C 退出测试"
+echo ""
+
+# 切换到IMU设备目录
+cd /sys/bus/iio/devices/iio:device1
+
+# 检查必要的文件是否存在
+if [ ! -f "in_accel_x_raw" ] || [ ! -f "in_accel_y_raw" ] || [ ! -f "in_accel_z_raw" ]; then
+    echo "错误: 找不到加速度计数据文件"
+    exit 1
+fi
+
+# 设置Ctrl+C信号处理
+trap 'echo -e "\n\n测试结束"; exit 0' SIGINT
+
+# 持续读取数据
+while true; do
+    # 读取三个轴的加速度数据
+    x=$(cat in_accel_x_raw)
+    y=$(cat in_accel_y_raw)
+    z=$(cat in_accel_z_raw)
+    
+    # 显示数据
+    echo "X: $x  Y: $y  Z: $z"
+    
+    # 等待0.1秒
+    sleep 0.1
+done
+

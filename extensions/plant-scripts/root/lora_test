@@ -1,0 +1,3 @@
+cd /mnt
+./sx126x_demo_private tx
+# ./sx126x_demo rx

@@ -1,0 +1,115 @@
+#!/bin/bash
+
+# PWM蜂鸣器测试脚本 - 支持C大调音阶和音量渐增
+# 频率列表：C4(262), D4(294), E4(330), F4(349), G4(392), A4(440), B4(494), C5(523)
+# 音量通过占空比从0%到100%渐增
+
+# 检查是否以root权限运行
+if [ "$(id -u)" -ne 0 ]; then
+    echo "错误：请使用root权限运行此脚本（如sudo）"
+    exit 1
+fi
+
+# PWM设备路径
+PWM_CHIP="/sys/class/pwm/pwmchip1"
+PWM_CHANNEL="pwm0"
+
+# 检查PWM控制器是否存在
+if [ ! -d "$PWM_CHIP" ]; then
+    echo "错误：找不到PWM控制器 $PWM_CHIP"
+    echo "请确认PWM驱动已加载且硬件支持"
+    exit 1
+fi
+
+# 检查是否已导出PWM通道
+if [ ! -d "$PWM_CHIP/$PWM_CHANNEL" ]; then
+    echo "导出PWM通道..."
+    echo 0 > "$PWM_CHIP/export"
+    if [ $? -ne 0 ]; then
+        echo "错误：导出PWM通道失败"
+        exit 1
+    fi
+fi
+
+# 定义要测试的频率列表（C大调音阶）
+FREQUENCIES=(
+    "262 C4"
+)
+
+# 定义占空比步长（百分比）
+DUTY_STEP=10  # 每次增加10%
+MAX_DUTY=100  # 最大占空比
+
+# 测试每个频率
+for freq_info in "${FREQUENCIES[@]}"; do
+    freq=$(echo "$freq_info" | awk '{print $1}')
+    note=$(echo "$freq_info" | awk '{print $2}')
+    
+    echo -e "\n=== 测试频率: $freq Hz ($note) ==="
+    
+    # 计算周期（ns）
+    period_ns=$(echo "scale=0; 1000000000 / $freq" | bc)
+    if [ $? -ne 0 ]; then
+        echo "错误：频率计算失败 (频率: $freq)"
+        continue
+    fi
+    
+    # 设置周期
+    echo "设置周期: $period_ns ns"
+    echo "$period_ns" > "$PWM_CHIP/$PWM_CHANNEL/period"
+    if [ $? -ne 0 ]; then
+        echo "错误：设置周期失败"
+        continue
+    fi
+    
+    # 循环增加占空比
+    for (( duty=0; duty<=$MAX_DUTY; duty+=$DUTY_STEP )); do
+        # 计算占空比对应的纳秒数
+        duty_cycle_ns=$(( (period_ns * duty) / 100 ))
+        
+        # 确保占空比不超过周期
+        if [ "$duty_cycle_ns" -gt "$period_ns" ]; then
+            duty_cycle_ns="$period_ns"
+        fi
+        
+        echo "设置占空比: $duty% ($duty_cycle_ns ns)"
+        
+        # 设置占空比
+        echo "$duty_cycle_ns" > "$PWM_CHIP/$PWM_CHANNEL/duty_cycle"
+        if [ $? -ne 0 ]; then
+            echo "错误：设置占空比失败"
+            break
+        fi
+        
+        # 启用PWM
+        echo 1 > "$PWM_CHIP/$PWM_CHANNEL/enable"
+        if [ $? -ne 0 ]; then
+            echo "错误：启用PWM失败"
+            break
+        fi
+        
+        # 播放一段时间（例如0.5秒）
+        sleep 0.5
+        
+        # 停用PWM
+        echo 0 > "$PWM_CHIP/$PWM_CHANNEL/enable"
+        if [ $? -ne 0 ]; then
+            echo "错误：停用PWM失败"
+            break
+        fi
+    done
+    
+    # 如果占空比循环被中断，跳过后续步骤
+    if [ $? -ne 0 ]; then
+        continue
+    fi
+done
+
+# 测试完成后取消导出PWM通道
+echo "测试完成，取消导出PWM通道..."
+echo 0 > "$PWM_CHIP/unexport"
+if [ $? -ne 0 ]; then
+    echo "警告：取消导出PWM通道失败"
+fi
+
+echo -e "\n所有频率测试完成！"

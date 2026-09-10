@@ -1,0 +1,2 @@
+cd /sys/bus/iio/devices/iio\:device2
+cat ./in_voltage2_raw
