@@ -1,0 +1,174 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Lesords <lesords168@gmail.com>
+Date: Thu, 10 Sep 2026 16:51:54 +0800
+Subject: [PATCH] arm64: dts: ti: add BeagleBadge board-extras overlay
+
+Overlay applied on top of TI's reference k3-am62l3-badge.dtb, keeping
+the proven TI baseline while adding the factory-test devices:
+
+- disable TI's multicolor LED (frees ecap2/ecap1/epwm1) and
+  gpio-7-segment digits (frees mcp23s18 GPIOs)
+- add badge:matrix gpio-led digits, rgb:red/green/blue pwm-leds,
+  gpio-keys, pwm-gpio buzzer and mikrobus
+- userspace e-paper control: spidev on &spi0 cs0 plus D/C#, RES# and
+  BUSY pins muxed as GPIOs
+
+Deliberately excluded: watchdog / system-idle-states / thermal-zone
+backports (idle-states is a boot-hang suspect) and the DSI chain.
+
+Signed-off-by: Lesords <lesords168@gmail.com>
+---
+ arch/arm64/boot/dts/ti/Makefile               |   1 +
+ .../k3-am62l3-badge-beaglebadge-extras.dtso   | 128 ++++++++++++++++++
+ 2 files changed, 129 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
+
+diff --git a/arch/arm64/boot/dts/ti/Makefile b/arch/arm64/boot/dts/ti/Makefile
+index 5e52e51..9d61ae7 100644
+--- a/arch/arm64/boot/dts/ti/Makefile
++++ b/arch/arm64/boot/dts/ti/Makefile
+@@ -62,6 +62,7 @@ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-ecap-capture.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-epaper.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-eqep.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-eink-gdey042t81.dtbo
++dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-beaglebadge-extras.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-mcan.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-pwm.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge.dtb
+diff --git a/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
+new file mode 100644
+index 0000000..b452ecd
+--- /dev/null
++++ b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
+@@ -0,0 +1,128 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * BeagleBadge board-extras overlay, applied on top of TI's reference
++ * k3-am62l3-badge.dtb:
++ *   - keep TI's proven SoC/baseline configuration untouched
++ *   - disable TI's multicolor LED (ecap2/ecap1/epwm1) and gpio-7-segment
++ *     digits (mcp23s18 GPIOs) to free the PWM channels and expander pins
++ *   - add the factory-test devices: badge:matrix gpio-led digits, rgb:red/
++ *     green/blue pwm-leds, gpio-keys, pwm-gpio buzzer, mikrobus pwm and the
++ *     userspace e-paper spidev (chip select 0) with its control pins
++ * Deliberately NOT included: watchdog / system-idle-states / thermal-zone
++ * backports (idle-states is a boot-hang suspect) and the DSI chain.
++ */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++#include "k3-pinctrl.h"
++
++&pmx0 {
++	bb_spi0_epaper_pins: bb-spi0-epaper-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x01a8, PIN_OUTPUT, 0) /* (E13) SPI0_CLK */
++			AM62LX_IOPAD(0x01a0, PIN_OUTPUT, 0) /* (E11) SPI0_CS0 */
++			AM62LX_IOPAD(0x01b0, PIN_OUTPUT, 0) /* (B12) SPI0_D1 */
++			AM62LX_IOPAD(0x01ac, PIN_OUTPUT, 7) /* (E12) D/C#.GPIO0_90 */
++			AM62LX_IOPAD(0x009c, PIN_OUTPUT, 7) /* (H20) RES#.GPIO0_24 */
++			AM62LX_IOPAD(0x00dc, PIN_INPUT, 7)  /* (N21) BUSY.GPIO0_39 */
++		>;
++	};
++};
++
++/* free the PWM channels used by TI's multicolor LED */
++&{/multicolor-led} {
++	status = "disabled";
++};
++
++/* free the mcp23s18 segment GPIOs used by TI's gpio-7-segment driver */
++&{/seven-segment-left} {
++	status = "disabled";
++};
++
++&{/seven-segment-right} {
++	status = "disabled";
++};
++
++/* e-paper panel, driven from userspace via spidev (factory epaper_test) */
++&spi0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_spi0_epaper_pins>;
++	status = "okay";
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	spidev@0 {
++		compatible = "rohm,dh2228fv";
++		reg = <0>;
++		spi-max-frequency = <12500000>;
++		symlink = "spi/0.0";
++	};
++};
++
++/ {
++	fragment@5 {
++		target-path = "/";
++		__overlay__ {
++
++		led-matrix {
++		compatible = "gpio-leds";
++
++		led-1-a { label = "badge:matrix:led1_a"; gpios = <&mcp23s18 0 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-1-b { label = "badge:matrix:led1_b"; gpios = <&mcp23s18 1 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-1-c { label = "badge:matrix:led1_c"; gpios = <&mcp23s18 2 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-1-d { label = "badge:matrix:led1_d"; gpios = <&mcp23s18 3 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-1-e { label = "badge:matrix:led1_e"; gpios = <&mcp23s18 4 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-1-f { label = "badge:matrix:led1_f"; gpios = <&mcp23s18 5 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-1-g { label = "badge:matrix:led1_g"; gpios = <&mcp23s18 6 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-2-a { label = "badge:matrix:led2_a"; gpios = <&mcp23s18 8 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-2-b { label = "badge:matrix:led2_b"; gpios = <&mcp23s18 9 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-2-c { label = "badge:matrix:led2_c"; gpios = <&mcp23s18 10 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-2-d { label = "badge:matrix:led2_d"; gpios = <&mcp23s18 11 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-2-e { label = "badge:matrix:led2_e"; gpios = <&mcp23s18 12 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-2-f { label = "badge:matrix:led2_f"; gpios = <&mcp23s18 13 GPIO_ACTIVE_LOW>; default-state = "off"; };
++		led-2-g { label = "badge:matrix:led2_g"; gpios = <&mcp23s18 14 GPIO_ACTIVE_LOW>; default-state = "off"; };
++	};
++
++	red-led {
++		compatible = "pwm-leds";
++		led-red { label = "rgb:red"; pwms = <&ecap2 0 1000000 0>; max-brightness = <255>; };
++	};
++
++	green-led {
++		compatible = "pwm-leds";
++		led-green { label = "rgb:green"; pwms = <&epwm1 0 1000000 0>; max-brightness = <255>; };
++	};
++
++	blue-led {
++		compatible = "pwm-leds";
++		led-blue { label = "rgb:blue"; pwms = <&epwm1 1 1000000 0>; max-brightness = <255>; };
++	};
++
++	buzzer-pwm {
++		#pwm-cells = <3>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
++	};
++
++	mikrobus-pwm {
++		#pwm-cells = <3>;
++		compatible = "pwm-gpio";
++		gpios = <&gpio0 33 GPIO_ACTIVE_HIGH>;
++	};
++
++	buttons {
++		compatible = "gpio-keys";
++
++		left   { label = "GPIO Key Left";   gpios = <&gpio0 31 0>;  linux,code = <KEY_LEFT>; };
++		right  { label = "GPIO Key Right";  gpios = <&gpio0 95 0>;  linux,code = <KEY_RIGHT>; };
++		down   { label = "GPIO Key Down";   gpios = <&gpio0 42 0>;  linux,code = <KEY_DOWN>; };
++		up     { label = "GPIO Key Up";     gpios = <&gpio0 32 0>;  linux,code = <KEY_UP>; };
++		back   { label = "GPIO Key Back";   gpios = <&gpio0 104 0>; linux,code = <KEY_BACK>; };
++		select { label = "GPIO Key Select"; gpios = <&gpio0 26 0>;  linux,code = <KEY_SELECT>; };
++		};
++		};
++	};
++};
+-- 
+2.43.0
+
