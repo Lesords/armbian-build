@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+"""BeagleBone 工位1测试脚本"""
+
+import os
+import select
+import signal
+import struct
+import subprocess
+import sys
+import time
+
+# ====================== 常量 ======================
+EVENT_FORMAT = 'llHHI'
+EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
+
+# 按键定义
+KEY_UP = 103
+KEY_LEFT = 105
+KEY_RIGHT = 106
+KEY_DOWN = 108
+KEY_BACK = 158
+KEY_SELECT = 353
+
+# RGB LED 路径
+RGB_PATHS = {c: f'/sys/class/leds/rgb:{c}/brightness' for c in ('red', 'green', 'blue')}
+
+# 数码管 LED 路径 (前7个为数码管1的a-g段，后7个为数码管2的a-g段)
+SEGMENT_NAMES = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+SEGMENT_PATHS = [
+    f'/sys/class/leds/badge:matrix:led{disp}_{seg}/brightness'
+    for disp in (1, 2)
+    for seg in SEGMENT_NAMES
+]
+TOTAL_LEDS = len(SEGMENT_PATHS)
+HALF_LEDS = TOTAL_LEDS // 2
+
+SENSOR_PATH = '/sys/bus/iio/devices/iio:device2/in_voltage2_raw'
+EVENT_DEV = '/dev/input/event0'
+BUZZER_BIN = '/root/buzzer_test'
+
+START_TIMEOUT = 30
+KEY_TIMEOUT = 30
+
+
+# ====================== 工具函数 ======================
+def sysfs_write(path, value):
+    with open(path, 'w') as f:
+        f.write(str(value))
+
+
+def sysfs_read(path):
+    with open(path, 'r') as f:
+        return f.read().strip()
+
+
+def rgb_on(color):
+    sysfs_write(RGB_PATHS[color], 255)
+
+
+def rgb_off(color):
+    sysfs_write(RGB_PATHS[color], 0)
+
+
+def rgb_all_off():
+    for c in RGB_PATHS:
+        rgb_off(c)
+
+
+def segment_on(idx):
+    sysfs_write(SEGMENT_PATHS[idx], 255)
+
+
+def segment_off(idx):
+    sysfs_write(SEGMENT_PATHS[idx], 0)
+
+
+def wait_for_key(target_code, timeout_sec, value=0):
+    """等待指定按键松开。超时返回 False，检测到返回 True。"""
+    fd = os.open(EVENT_DEV, os.O_RDONLY)
+    try:
+        deadline = time.monotonic() + timeout_sec
+        buf = b''
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            ready, _, _ = select.select([fd], [], [], remaining)
+            if not ready:
+                return False
+            buf += os.read(fd, EVENT_SIZE)
+            while len(buf) >= EVENT_SIZE:
+                chunk, buf = buf[:EVENT_SIZE], buf[EVENT_SIZE:]
+                _, _, ev_type, ev_code, ev_value = struct.unpack(EVENT_FORMAT, chunk)
+                if ev_type == 1 and ev_code == target_code and ev_value == value:
+                    return True
+    finally:
+        os.close(fd)
+
+
+def sensor_read():
+    try:
+        v = int(sysfs_read(SENSOR_PATH))
+        return v
+    except (OSError, ValueError):
+        return None
+
+
+# ====================== 测试结论 ======================
+def pass_action():
+    print("=== 工位1测试通过 ===")
+    rgb_all_off()
+    for _ in range(25):
+        rgb_on('green')
+        time.sleep(0.2)
+        rgb_off('green')
+        time.sleep(0.2)
+
+
+def fail_action():
+    print("=== 工位1测试失败 ===")
+    rgb_all_off()
+    rgb_on('red')
+
+
+# ====================== 测试步骤 ======================
+def test_rgb():
+    """测试 RGB LED：绿、蓝依次亮 1 秒，然后全亮。"""
+    print("测试绿色LED...")
+    rgb_on('green')
+    time.sleep(1)
+    rgb_off('green')
+    time.sleep(0.5)
+
+    print("测试蓝色LED...")
+    rgb_on('blue')
+    time.sleep(1)
+    rgb_off('blue')
+    time.sleep(0.5)
+
+    print("同时点亮所有LED...")
+    for c in ('red', 'green', 'blue'):
+        rgb_on(c)
+    print("RGB LED测试完成！")
+
+
+def test_segments():
+    """测试两个数码管：逐对点亮 -> 全亮 -> 方向键交互关段。"""
+    # 逐对点亮
+    for i in range(HALF_LEDS):
+        segment_on(i)
+        segment_on(i + HALF_LEDS)
+        time.sleep(0.3)
+
+    # 全部关闭
+    for i in range(TOTAL_LEDS):
+        segment_off(i)
+    time.sleep(0.5)
+
+    # 全部点亮
+    for i in range(TOTAL_LEDS):
+        segment_on(i)
+
+    # UP → 关 a 段
+    print("请按下 UP 键以继续...")
+    if not wait_for_key(KEY_UP, KEY_TIMEOUT):
+        print("超时或未检测到 KEY_UP，测试失败")
+        return False
+    segment_off(0)
+    segment_off(HALF_LEDS)
+    print("a段已关闭！")
+
+    # DOWN → 关 d 段
+    print("请按下 DOWN 键以继续...")
+    if not wait_for_key(KEY_DOWN, KEY_TIMEOUT):
+        print("超时或未检测到 KEY_DOWN，测试失败")
+        return False
+    segment_off(3)
+    segment_off(HALF_LEDS + 3)
+    print("d段已关闭！")
+
+    # LEFT → 关 e, f 段
+    print("请按下 LEFT 键以继续...")
+    if not wait_for_key(KEY_LEFT, KEY_TIMEOUT):
+        print("超时或未检测到 KEY_LEFT，测试失败")
+        return False
+    for idx in (4, 5):
+        segment_off(idx)
+        segment_off(HALF_LEDS + idx)
+    print("e f段已关闭！")
+
+    # RIGHT → 关 b, c, g 段
+    print("请按下 RIGHT 键以继续...")
+    if not wait_for_key(KEY_RIGHT, KEY_TIMEOUT):
+        print("超时或未检测到 KEY_RIGHT，测试失败")
+        return False
+    for idx in (1, 2, 6):
+        segment_off(idx)
+        segment_off(HALF_LEDS + idx)
+    print("b c g段已关闭！")
+
+    return True
+
+
+def test_sensor():
+    """测试照度传感器：连续 5 次读取合法且不为 0。"""
+    for i in range(1, 6):
+        raw = sensor_read()
+        if raw is None:
+            print(f"第 {i} 次读取失败：无法读取传感器")
+            return False
+        if raw == 0:
+            print(f"第 {i} 次读取失败：传感器数值为0")
+            return False
+        print(f"第 {i} 次读取 -> 当前原始值: {raw}")
+        time.sleep(1)
+    return True
+
+
+# ====================== 主流程 ======================
+def main():
+    signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(0))
+
+    print("开始工位1测试...")
+
+    # 红灯亮 5 秒，等待 BACK 键进入测试模式
+    rgb_all_off()
+    rgb_on('red')
+    print("请在30秒内按下BACK键以执行工位1测试...")
+
+    if not wait_for_key(KEY_BACK, START_TIMEOUT):
+        print("未检测到KEY_BACK按键，跳过测试，系统正常启动")
+        rgb_off('red')
+        sys.exit(0)
+
+    print("检测到KEY_BACK，开始LED测试...")
+    rgb_off('red')
+    time.sleep(0.5)
+
+    try:
+        test_rgb()
+        subprocess.run([BUZZER_BIN], check=True)
+
+        # 等待 SELECT 键关闭 RGB
+        print("等待按下 KEY_SELECT 键关闭灯光...")
+        if not wait_for_key(KEY_SELECT, KEY_TIMEOUT):
+            print("超时或未检测到 KEY_SELECT，测试失败")
+            fail_action()
+            sys.exit(1)
+
+        rgb_all_off()
+
+        if not test_segments():
+            fail_action()
+            sys.exit(1)
+
+        if not test_sensor():
+            fail_action()
+            sys.exit(1)
+
+        pass_action()
+        sys.exit(0)
+
+    except Exception as e:
+        print(f"测试异常: {e}")
+        fail_action()
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

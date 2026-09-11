@@ -1,0 +1,63 @@
+#!/bin/bash
+
+if [ "$#" -ne 4 ]; then
+    echo "Usage: $0 <mode> <product_week> <product_year> <product_serial>"
+    echo "  mode: 0 (only support BeagleBadge A0 now)"
+    echo "  Example: $0 0 25 26 0001"
+    exit 1
+fi
+
+mode=$1
+product_week=$2
+product_year=$3
+product_serial=$4
+
+# ========== 按客户新头文件重新定义固定字段 ==========
+# 标准头部：aa 55 33 ee 01 37 00 10 2e 00 (payload_len修正为0x37)
+header="\xaa\x55\x33\xee\x01\x37\x00\x10\x2e\x00"
+# name[16] = BEAGLEBADGE-A0-\0
+board_name="BEAGLEBADGE-A0-\x00"
+# 固定硬件区段：version[2] proc[4] variant[2] pcb[2] sch[2] sw[2]
+hardware_fixed="00000000000001"
+# 生产周+生产年份 各2字符
+week_year="${product_week}${product_year}"
+# 板ID前缀固定 4字节 BBDG
+board_prefix="BBDG"
+# DDR-info TLV 固定5字节（客户文档正式定义，A0版型永久不变）
+ddr_tlv="\x11\x02\x00\xa8\x12"
+# TLV结束标记
+end_mark="\xfe"
+
+# 处理12字节序列号：传入4位sn，剩余8位补字符'0'(\x30)
+pad_zero=$(printf '\x30%.0s' {1..8})
+serial_12byte="${product_serial}${pad_zero}"
+
+#根据模式拼接完整写入串，当前仅mode0适配BeagleBadge A0
+if [ "$mode" = "0" ]; then
+    cmd_pre="${header}${board_name}${hardware_fixed}${week_year}${board_prefix}${serial_12byte}"
+    echo "模式0: BeagleBadge A0 new standard EEPROM data (12byte serial)"
+elif [ "$mode" = "1" ]; then
+    # 如需扩展其他版型在此追加独立拼接逻辑
+    echo "错误: mode 1 not support for BeagleBadge now"
+    exit 1
+else
+    echo "错误: 模式只能是0"
+    exit 1
+fi
+
+# 完整写入指令 = 前缀 + DDR-info TLV + 结束符
+cmd="${cmd_pre}${ddr_tlv}${end_mark}"
+
+# 先清空前64字节消除旧脏数据
+printf '\xff%.0s' {1..64} > /sys/class/i2c-dev/i2c-1/device/1-0050/eeprom
+# 写入目标：i2c-1 0x50 eeprom
+echo -en "$cmd" > /sys/class/i2c-dev/i2c-1/device/1-0050/eeprom
+
+if [ $? -eq 0 ]; then
+    echo "EEPROM_WRITE_OK"
+else
+    echo "EEPROM_WRITE_FAIL"
+    exit 1
+fi
+
+

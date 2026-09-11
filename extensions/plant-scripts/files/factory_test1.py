@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """BeagleBadge 工位1测试脚本 - 参数化版本
 用法: ./factory_test1.py <command>
-Commands: back | rgb | buzzer | select | seg_all | seg_off | up | down | left | right | sensor | pass | fail
+Commands: back | rgb_off | rgb_red | rgb_green | rgb_blue | rgb_blink | buzzer | select | seg_all | seg_off | seg_run | up | down | left | right | sensor | pass | fail
 """
 
 import os, select, signal, struct, subprocess, sys, time
@@ -188,6 +188,35 @@ def cmd_sensor():
     print("SENSOR_OK")
 
 
+def cmd_rgb_blink():
+    """RGB三色循环闪烁：红→绿→蓝间隔0.5s，CTRL+C退出"""
+    colors = ['red', 'green', 'blue']
+    rgb_all_off()
+    try:
+        while True:
+            for c in colors:
+                rgb_all_off()
+                sw(RGB_PATHS[c], 255)
+                time.sleep(0.5)
+    finally:
+        rgb_all_off()
+
+
+def cmd_seg_run():
+    """数码管流水灯：单灯循环点亮间隔0.3s，CTRL+C退出"""
+    for i in range(TOTAL_LEDS):
+        sw(SEGMENT_PATHS[i], 0)
+    try:
+        while True:
+            for i in range(TOTAL_LEDS):
+                sw(SEGMENT_PATHS[(i - 1) % TOTAL_LEDS], 0)
+                sw(SEGMENT_PATHS[i], 255)
+                time.sleep(0.3)
+    finally:
+        for i in range(TOTAL_LEDS):
+            sw(SEGMENT_PATHS[i], 0)
+
+
 def cmd_pass():
     rgb_all_off()
     print("工位1测试通过")
@@ -219,6 +248,8 @@ COMMANDS = {
     'left': cmd_key_left,
     'right': cmd_key_right,
     'sensor': cmd_sensor,
+    'rgb_blink': cmd_rgb_blink,
+    'seg_run': cmd_seg_run,
     'pass': cmd_pass,
     'fail': cmd_fail,
 }

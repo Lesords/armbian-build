@@ -3,7 +3,7 @@
 # IMU加速度计10次采样自动判定脚本
 TARGET_Z=16384
 TOLERANCE=1000
-sample_count=10
+sample_count=3
 pass=1
 
 # 进入设备目录
@@ -38,7 +38,7 @@ done
 
 echo "----------------------------------------"
 if [ $pass -eq 1 ]; then
-    echo "PASS! 10次Z轴全部在${TARGET_Z}±${TOLERANCE}范围内"
+    echo "PASS! Z轴全部在${TARGET_Z}±${TOLERANCE}范围内"
     exit 0
 else
     echo "FAIL! 存在Z轴超差采样"

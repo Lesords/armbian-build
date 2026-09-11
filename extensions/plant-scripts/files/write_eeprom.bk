@@ -1,0 +1,58 @@
+#!/bin/bash
+
+if [ "$#" -ne 4 ]; then
+    echo "Usage: $0 <mode> <product_week> <product_year> <product_serial>"
+    echo "  mode: 0 (only support BeagleBadge A0 now)"
+    echo "  Example: $0 0 25 26 0001"
+    exit 1
+fi
+
+mode=$1
+product_week=$2
+product_year=$3
+product_serial=$4
+
+# 标准固定头部：aa 55 33 ee 01 32 00 10 2e 00
+header="\xaa\x55\x33\xee\x01\x32\x00\x10\x2e\x00"
+# name[16] = BEAGLEBADGE-A0-\0
+board_name="BEAGLEBADGE-A0-\x00"
+# version+proc+variant+pcb+sch+bom+sw+vendor_id
+fixed_str="0100000000000064"
+# 生产周+生产年份
+week_year="${product_week}${product_year}"
+# 板料号固定 BBDG00
+pn="BBDG00"
+# 序列号
+sn="${product_serial}"
+# 客户要求序列号与FE中间插入的固定字节
+middle_extra="\x11\x02\x00\xa8\x12"
+# TLV结束标记
+end_mark="\xfe"
+
+#根据模式拼接完整写入串，当前仅mode0适配BeagleBadge A0
+if [ "$mode" = "0" ]; then
+    cmd_pre="${header}${board_name}${fixed_str}${week_year}${pn}${sn}"
+    echo "模式0: BeagleBadge A0 standard EEPROM data"
+elif [ "$mode" = "1" ]; then
+    # 如需扩展其他版型在此追加独立拼接逻辑
+    echo "错误: mode 1 not support for BeagleBadge now"
+    exit 1
+else
+    echo "错误: 模式只能是0"
+    exit 1
+fi
+
+# 完整写入指令 = 前缀 + 固定中间字节 + 结束符
+cmd="${cmd_pre}${middle_extra}${end_mark}"
+
+# 先清空前64字节消除旧脏数据
+printf '\xff%.0s' {1..64} > /sys/class/i2c-dev/i2c-1/device/1-0050/eeprom
+# 写入目标：i2c-1 0x50 eeprom
+echo -en $cmd > /sys/class/i2c-dev/i2c-1/device/1-0050/eeprom
+
+if [ $? -eq 0 ]; then
+    echo "EEPROM_WRITE_OK"
+else
+    echo "EEPROM_WRITE_FAIL"
+    exit 1
+fi
