@@ -28,12 +28,12 @@ function post_customize_image__install_plant_scripts() {
 
 		install -d "${SDCARD}/${name}"
 		for f in "${dir}"/*; do
-			[[ -f "${f}" ]] || continue
+			[[ -e "${f}" ]] || continue
 			case "$(basename "${f}")" in
 				.viminfo | *.sw? | *~) continue ;; # editor leftovers
 			esac
-			run_host_command_logged cp "${f}" "${SDCARD}/${name}/"
-			chmod +x "${SDCARD}/${name}/$(basename "${f}")"
+			run_host_command_logged cp -r "${f}" "${SDCARD}/${name}/"
+			chmod -R +x "${SDCARD}/${name}/$(basename "${f}")"
 		done
 	done
 }
