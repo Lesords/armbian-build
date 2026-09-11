@@ -1,50 +1,32 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Lesords <lesords168@gmail.com>
-Date: Thu, 10 Sep 2026 17:43:45 +0800
-Subject: [PATCH] arm64: dts: ti: add BeagleBadge board-extras overlay (full
- test set)
-
-Overlay applied on top of TI's reference k3-am62l3-badge.dtb, keeping
-the proven TI baseline while adding the factory-test devices:
-
-- disable TI's multicolor LED (frees ecap2/ecap1/epwm1) and
-  gpio-7-segment digits (frees mcp23s18 GPIOs)
-- add badge:matrix gpio-led digits, rgb:red/green/blue pwm-leds,
-  gpio-keys, pwm-gpio buzzer and mikrobus
-- userspace e-paper control: spidev on &spi0 cs0 plus D/C#, RES# and
-  BUSY pins muxed as GPIOs
-- UART4/5 (with aliases), I2C0/1/2 (with 24c32 EEPROM and LSM6DS3TR-C
-  IMU on I2C0), ADC channels 0-3, spidev on &spi1 cs1 (IMU SPI test)
-  and &spi3 cs0 (LoRa), and the RGMII/MDIO/WKUP GPIO test pinmux
-
-Deliberately excluded: watchdog / system-idle-states / thermal-zone
-backports (idle-states is a boot-hang suspect) and the DSI chain.
+Date: Fri, 11 Sep 2026 15:06:50 +0800
+Subject: [PATCH] arm64: dts: ti: BeagleBadge extras overlay v11 (rgb
+ default-state off)
 
 Signed-off-by: Lesords <lesords168@gmail.com>
 ---
- arch/arm64/boot/dts/ti/Makefile               |   1 +
- .../k3-am62l3-badge-beaglebadge-extras.dtso   | 312 ++++++++++++++++++
- 2 files changed, 313 insertions(+)
+ arch/arm64/boot/dts/ti/Makefile               |   2 +
+ .../k3-am62l3-badge-beaglebadge-extras.dtso   | 469 ++++++++++++++++++
+ 2 files changed, 471 insertions(+)
  create mode 100644 arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
 
 diff --git a/arch/arm64/boot/dts/ti/Makefile b/arch/arm64/boot/dts/ti/Makefile
-index 5e52e51..9d61ae7 100644
+index cb26238..57a082e 100644
 --- a/arch/arm64/boot/dts/ti/Makefile
 +++ b/arch/arm64/boot/dts/ti/Makefile
-@@ -62,6 +62,7 @@ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-ecap-capture.dtbo
- dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-epaper.dtbo
- dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-eqep.dtbo
- dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-eink-gdey042t81.dtbo
+@@ -590,3 +590,5 @@ DTC_FLAGS_k3-j721s2-evm-ub954 += -@
+ DTC_FLAGS_k3-j722s-evm += -@
+ DTC_FLAGS_k3-j784s4-evm += -@
+ DTC_FLAGS_k3-j742s2-evm += -@
++
 +dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-beaglebadge-extras.dtbo
- dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-mcan.dtbo
- dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-pwm.dtbo
- dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge.dtb
 diff --git a/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
 new file mode 100644
-index 0000000..42631b8
+index 0000000..a7f251b
 --- /dev/null
 +++ b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
-@@ -0,0 +1,312 @@
+@@ -0,0 +1,469 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * BeagleBadge board-extras overlay, applied on top of TI's reference
@@ -134,34 +116,46 @@ index 0000000..42631b8
 +	};
 +
 +	red-led {
-+		compatible = "pwm-leds";
-+		led-red { label = "rgb:red"; pwms = <&ecap2 0 1000000 0>; max-brightness = <255>; };
++		compatible = "gpio-leds";
++		pinctrl-names = "default";
++		pinctrl-0 = <&bb_rgb_red_pins>;
++		led-red { label = "rgb:red"; gpios = <&gpio0 83 GPIO_ACTIVE_HIGH>; default-state = "off"; };
 +	};
 +
 +	green-led {
-+		compatible = "pwm-leds";
-+		led-green { label = "rgb:green"; pwms = <&epwm1 0 1000000 0>; max-brightness = <255>; };
++		compatible = "gpio-leds";
++		pinctrl-names = "default";
++		pinctrl-0 = <&bb_rgb_green_pins>;
++		led-green { label = "rgb:green"; gpios = <&gpio0 81 GPIO_ACTIVE_HIGH>; default-state = "off"; };
 +	};
 +
 +	blue-led {
-+		compatible = "pwm-leds";
-+		led-blue { label = "rgb:blue"; pwms = <&epwm1 1 1000000 0>; max-brightness = <255>; };
++		compatible = "gpio-leds";
++		pinctrl-names = "default";
++		pinctrl-0 = <&bb_rgb_blue_pins>;
++		led-blue { label = "rgb:blue"; gpios = <&gpio0 82 GPIO_ACTIVE_HIGH>; default-state = "off"; };
 +	};
 +
 +	buzzer-pwm {
 +		#pwm-cells = <3>;
 +		compatible = "pwm-gpio";
++		pinctrl-names = "default";
++		pinctrl-0 = <&bb_buzzer_pins>;
 +		gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
 +	};
 +
 +	mikrobus-pwm {
 +		#pwm-cells = <3>;
 +		compatible = "pwm-gpio";
++		pinctrl-names = "default";
++		pinctrl-0 = <&bb_mikrobus_pwm_pins>;
 +		gpios = <&gpio0 33 GPIO_ACTIVE_HIGH>;
 +	};
 +
 +	buttons {
 +		compatible = "gpio-keys";
++		pinctrl-names = "default";
++		pinctrl-0 = <&bb_button_pins>;
 +
 +		left   { label = "GPIO Key Left";   gpios = <&gpio0 31 0>;  linux,code = <KEY_LEFT>; };
 +		right  { label = "GPIO Key Right";  gpios = <&gpio0 95 0>;  linux,code = <KEY_RIGHT>; };
@@ -278,7 +272,11 @@ index 0000000..42631b8
 +
 +&gpio0 {
 +	pinctrl-names = "default";
-+	pinctrl-0 = <&bb_others_gpio_pins>, <&bb_lora_pins>;
++	pinctrl-0 = <&bb_others_gpio_pins>, <&bb_lora_pins>, <&bb_mikrobus_rst_pins>;
++};
++
++&gpio2 {
++	status = "okay";
 +};
 +
 +&wkup_gpio0 {
@@ -356,6 +354,147 @@ index 0000000..42631b8
 +		spi-max-frequency = <12500000>;
 +		symlink = "spi/3.0";
 +	};
++};
++
++/* ---- v3: RGB/buzzer pinmux + WiFi main power ---- */
++
++&pmx0 {
++	bb_rgb_red_pins: bb-rgb-red-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0190, PIN_OUTPUT, 7) /* (A11) RED.GPIO0_83 */
++		>;
++	};
++
++	bb_rgb_green_pins: bb-rgb-green-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0188, PIN_OUTPUT, 7) /* (A9) GREEN.GPIO0_81 */
++		>;
++	};
++
++	bb_rgb_blue_pins: bb-rgb-blue-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x018c, PIN_OUTPUT, 7) /* (B9) BLUE.GPIO0_82 */
++		>;
++	};
++
++	bb_buzzer_pins: bb-buzzer-pins {
++		/* retake F22 from TI's EHRPWM0_B mux: the speaker hangs off GPIO0_29 */
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x00b0, PIN_OUTPUT, 7) /* (F22) Buzzer_PWM.GPIO0_29 */
++		>;
++	};
++
++	bb_wifi_pwr_pins: bb-wifi-pwr-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0170, PIN_OUTPUT, 7) /* (AB9) WIFI_PWR_EN.GPIO0_75 */
++		>;
++	};
++};
++
++/ {
++	fragment@51 {
++		target-path = "/";
++		__overlay__ {
++
++		bb_wifi_3v3: bb-wifi-3v3 {
++			compatible = "regulator-fixed";
++			regulator-name = "wifi_3v3";
++			regulator-min-microvolt = <3300000>;
++			regulator-max-microvolt = <3300000>;
++			enable-active-high;
++			gpio = <&gpio0 75 GPIO_ACTIVE_HIGH>;
++			pinctrl-names = "default";
++			pinctrl-0 = <&bb_wifi_pwr_pins>, <&bb_wkup_clkout_pins>, <&bb_wkup_ble_irq_pins>;
++			startup-delay-us = <50000>;
++		};
++		};
++	};
++};
++
++/* chain the WiFi main 3V3 (GPIO0_75) under TI's wlan_en (GPIO0_51):
++   sdhci2 enables vmmc (wlan_en) -> which now needs wifi_3v3 first,
++   so both power rails come up when the WiFi card is probed */
++&wlan_en {
++	vin-supply = <&bb_wifi_3v3>;
++};
++
++/* ---- v4: button/mikrobus/SD-LDD pinmux, WiFi 32K clockout ---- */
++
++&pmx0 {
++	bb_button_pins: bb-button-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x00b8, PIN_INPUT, 7) /* (L21) Left.GPIO0_31   */
++			AM62LX_IOPAD(0x01c0, PIN_INPUT, 7) /* (B13) Right.GPIO0_95  */
++			AM62LX_IOPAD(0x00e8, PIN_INPUT, 7) /* (L19) Down.GPIO0_42   */
++			AM62LX_IOPAD(0x00c0, PIN_INPUT, 7) /* (N19) Up.GPIO0_32     */
++			AM62LX_IOPAD(0x01e4, PIN_INPUT, 7) /* (D16) Back.GPIO0_104  */
++			AM62LX_IOPAD(0x00a4, PIN_INPUT, 7) /* (H18) Select.GPIO0_26 */
++		>;
++	};
++
++	bb_mikrobus_pwm_pins: bb-mikrobus-pwm-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x00c4, PIN_OUTPUT, 7) /* (N20) Mikrobus_PWM.GPIO0_33 */
++		>;
++	};
++
++	bb_mikrobus_rst_pins: bb-mikrobus-rst-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0194, PIN_OUTPUT, 7) /* (B11) Mikrobus_RST */
++		>;
++	};
++
++
++	bb_wkup_clkout_pins: bb-wkup-clkout-pins {
++		/* 32K clock pad feed for the WiFi module, absent from TI baseline */
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0018, PIN_OUTPUT, 0) /* (Y23) WKUP_CLKOUT */
++		>;
++	};
++
++	bb_wkup_ble_irq_pins: bb-wkup-ble-irq-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0008, PIN_INPUT_PULLDOWN, 7) /* WKUP_GPIO0_2 (BLE IRQ) */
++		>;
++	};
++};
++
++/* 0x007c (GPIO0_16) is the VDD_3V3_SD enable pad; its pinmux is owned by
++ * TI's regulator node. Do NOT also claim it from sdhci1 - the pin
++ * ownership conflict kills the SD controller and the regulator powers
++ * the card down mid-boot. */
++
++/* ---- OSPI flash: forced to plain 1-1-1 SPI ----
++ * The board dts (and TI reference) run this NOR in octal 8-8-8, with cdns,*
++ * controller timings. On this board the 8-line data path never writes
++ * correctly under Linux (with or without the timings - data lands as
++ * 4-byte zeros and flashcp verify fails on the first block); U-Boot's
++ * driver handles it fine. JEDEC-ID probe over 1 line works, so pin the
++ * flash to 1-1-1: bootloader flashing is the only use case and speed is
++ * irrelevant there. RST/INT pins from the board dts are kept.
++ */
++&ospi0_nor {
++	spi-tx-bus-width = <1>;
++	spi-rx-bus-width = <1>;
++	spi-max-frequency = <25000000>;
++};
++
++&pmx0 {
++	bb_ospi_rst_pins: bb-ospi-rst-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x006c, PIN_OUTPUT, 7) /* (D20) OSPI0_RSTn.GPIO0_12 */
++		>;
++	};
++
++	bb_ospi_int_pins: bb-ospi-int-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0070, PIN_INPUT, 7) /* (D18) OSPI0_INTn.GPIO0_13 */
++		>;
++	};
++};
++
++&ospi0 {
++	pinctrl-0 = <&ospi0_pins_default>, <&bb_ospi_rst_pins>, <&bb_ospi_int_pins>;
 +};
 -- 
 2.43.0
