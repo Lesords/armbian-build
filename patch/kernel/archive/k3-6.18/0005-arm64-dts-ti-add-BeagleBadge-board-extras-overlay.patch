@@ -1,7 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Lesords <lesords168@gmail.com>
-Date: Thu, 10 Sep 2026 16:51:54 +0800
-Subject: [PATCH] arm64: dts: ti: add BeagleBadge board-extras overlay
+Date: Thu, 10 Sep 2026 17:43:45 +0800
+Subject: [PATCH] arm64: dts: ti: add BeagleBadge board-extras overlay (full
+ test set)
 
 Overlay applied on top of TI's reference k3-am62l3-badge.dtb, keeping
 the proven TI baseline while adding the factory-test devices:
@@ -12,6 +13,9 @@ the proven TI baseline while adding the factory-test devices:
   gpio-keys, pwm-gpio buzzer and mikrobus
 - userspace e-paper control: spidev on &spi0 cs0 plus D/C#, RES# and
   BUSY pins muxed as GPIOs
+- UART4/5 (with aliases), I2C0/1/2 (with 24c32 EEPROM and LSM6DS3TR-C
+  IMU on I2C0), ADC channels 0-3, spidev on &spi1 cs1 (IMU SPI test)
+  and &spi3 cs0 (LoRa), and the RGMII/MDIO/WKUP GPIO test pinmux
 
 Deliberately excluded: watchdog / system-idle-states / thermal-zone
 backports (idle-states is a boot-hang suspect) and the DSI chain.
@@ -19,8 +23,8 @@ backports (idle-states is a boot-hang suspect) and the DSI chain.
 Signed-off-by: Lesords <lesords168@gmail.com>
 ---
  arch/arm64/boot/dts/ti/Makefile               |   1 +
- .../k3-am62l3-badge-beaglebadge-extras.dtso   | 128 ++++++++++++++++++
- 2 files changed, 129 insertions(+)
+ .../k3-am62l3-badge-beaglebadge-extras.dtso   | 312 ++++++++++++++++++
+ 2 files changed, 313 insertions(+)
  create mode 100644 arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
 
 diff --git a/arch/arm64/boot/dts/ti/Makefile b/arch/arm64/boot/dts/ti/Makefile
@@ -37,10 +41,10 @@ index 5e52e51..9d61ae7 100644
  dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge.dtb
 diff --git a/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
 new file mode 100644
-index 0000000..b452ecd
+index 0000000..42631b8
 --- /dev/null
 +++ b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,312 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * BeagleBadge board-extras overlay, applied on top of TI's reference
@@ -106,7 +110,7 @@ index 0000000..b452ecd
 +};
 +
 +/ {
-+	fragment@5 {
++	fragment@50 {
 +		target-path = "/";
 +		__overlay__ {
 +
@@ -167,6 +171,190 @@ index 0000000..b452ecd
 +		select { label = "GPIO Key Select"; gpios = <&gpio0 26 0>;  linux,code = <KEY_SELECT>; };
 +		};
 +		};
++	};
++};
++
++/* ---- v2: full factory-test peripherals ---- */
++
++&{/aliases} {
++	serial4 = "/bus@f0000/serial@28400000";
++	serial5 = "/bus@f0000/serial@28500000";
++};
++
++&pmx0 {
++	bb_others_gpio_pins: bb-others-gpio-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0138, PIN_INPUT_PULLDOWN, 7) /* (Y8) RGMII1_RD0 */
++			AM62LX_IOPAD(0x013c, PIN_INPUT_PULLDOWN, 7) /* (AA6) RGMII1_RD1 */
++			AM62LX_IOPAD(0x0140, PIN_INPUT_PULLDOWN, 7) /* (AA8) RGMII1_RD2 */
++			AM62LX_IOPAD(0x0144, PIN_INPUT_PULLDOWN, 7) /* (W8) RGMII1_RD3 */
++			AM62LX_IOPAD(0x0134, PIN_INPUT_PULLDOWN, 7) /* (Y7) RGMII1_RXC */
++			AM62LX_IOPAD(0x0130, PIN_INPUT_PULLDOWN, 7) /* (Y6) RGMII1_RX_CTL */
++			AM62LX_IOPAD(0x0120, PIN_INPUT_PULLDOWN, 7) /* (AC10) RGMII1_TD0 */
++			AM62LX_IOPAD(0x0124, PIN_INPUT_PULLDOWN, 7) /* (W13) RGMII1_TD1 */
++			AM62LX_IOPAD(0x0128, PIN_INPUT_PULLDOWN, 7) /* (Y11) RGMII1_TD2 */
++			AM62LX_IOPAD(0x012c, PIN_INPUT_PULLDOWN, 7) /* (AA11) RGMII1_TD3 */
++			AM62LX_IOPAD(0x011c, PIN_INPUT_PULLDOWN, 7) /* (W11) RGMII1_TXC */
++			AM62LX_IOPAD(0x0118, PIN_INPUT_PULLDOWN, 7) /* (AB11) RGMII1_TX_CTL */
++			AM62LX_IOPAD(0x0174, PIN_INPUT_PULLDOWN, 7) /* (AC9) RGMII2_RD1 */
++			AM62LX_IOPAD(0x0178, PIN_INPUT_PULLDOWN, 7) /* (AB10) RGMII2_RD2 */
++			AM62LX_IOPAD(0x017c, PIN_INPUT_PULLDOWN, 7) /* (AB8) RGMII2_RD3 */
++			AM62LX_IOPAD(0x016c, PIN_INPUT_PULLDOWN, 7) /* (AC7) RGMII2_RXC */
++			AM62LX_IOPAD(0x0168, PIN_INPUT_PULLDOWN, 7) /* (AC8) RGMII2_RX_CTL */
++			AM62LX_IOPAD(0x0158, PIN_INPUT_PULLDOWN, 7) /* (AC12) RGMII2_TD0 */
++			AM62LX_IOPAD(0x015c, PIN_INPUT_PULLDOWN, 7) /* (AB13) RGMII2_TD1 */
++			AM62LX_IOPAD(0x0160, PIN_INPUT_PULLDOWN, 7) /* (AA12) RGMII2_TD2 */
++			AM62LX_IOPAD(0x0164, PIN_INPUT_PULLDOWN, 7) /* (AA13) RGMII2_TD3 */
++			AM62LX_IOPAD(0x0154, PIN_INPUT_PULLDOWN, 7) /* (Y13) RGMII2_TXC */
++			AM62LX_IOPAD(0x0150, PIN_INPUT_PULLDOWN, 7) /* (AB12) RGMII2_TX_CTL */
++			AM62LX_IOPAD(0x014c, PIN_INPUT_PULLDOWN, 7) /* (AC15) MDIO0_MDC */
++			AM62LX_IOPAD(0x0148, PIN_INPUT_PULLDOWN, 7) /* (AC13) MDIO0_MDIO */
++			AM62LX_IOPAD(0x00ec, PIN_INPUT_PULLDOWN, 7) /* (M23) GPIO0_43 */
++			AM62LX_IOPAD(0x0078, PIN_INPUT_PULLDOWN, 7) /* (L22) GPIO0_15 */
++		>;
++	};
++
++	bb_lora_pins: bb-lora-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x00e4, PIN_OUTPUT, 7) /* (L20) RF_SW1.GPIO0_41 */
++			AM62LX_IOPAD(0x00c8, PIN_OUTPUT, 7) /* (M19) NRST.GPIO0_34 */
++			AM62LX_IOPAD(0x01a4, PIN_INPUT, 7)  /* (D11) BUSY.GPIO0_88 */
++			AM62LX_IOPAD(0x01bc, PIN_INPUT, 7)  /* (B14) DIO.GPIO0_94 */
++		>;
++	};
++
++	bb_wkup_gpio0_pins: bb-wkup-gpio0-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x0000, PIN_OUTPUT, 7) /* (Y22) WKUP_GPIO0_0 */
++			AM62LX_IOPAD(0x0004, PIN_OUTPUT, 7) /* (AA23) WKUP_GPIO0_1 */
++			AM62LX_IOPAD(0x000C, PIN_OUTPUT, 7) /* (W22) WKUP_GPIO0_3 */
++		>;
++	};
++
++	bb_uart4_pins: bb-uart4-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x00a8, PIN_INPUT, 2)  /* (G23) UART4_RXD */
++			AM62LX_IOPAD(0x00ac, PIN_OUTPUT, 2) /* (G22) UART4_TXD */
++		>;
++	};
++
++	bb_uart5_pins: bb-uart5-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x01c4, PIN_INPUT, 1)  /* (B16) UART5_RXD */
++			AM62LX_IOPAD(0x01c8, PIN_OUTPUT, 1) /* (B15) UART5_TXD */
++		>;
++	};
++
++	bb_i2c0_pins: bb-i2c0-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x01cc, PIN_INPUT_PULLUP, 0) /* (B7) I2C0_SCL */
++			AM62LX_IOPAD(0x01d0, PIN_INPUT_PULLUP, 0) /* (A7) I2C0_SDA */
++		>;
++	};
++
++	bb_i2c1_pins: bb-i2c1-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x01d4, PIN_INPUT_PULLUP, 0) /* (D7) I2C1_SCL */
++			AM62LX_IOPAD(0x01d8, PIN_INPUT_PULLUP, 0) /* (A6) I2C1_SDA */
++		>;
++	};
++
++	bb_i2c2_pins: bb-i2c2-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x01dc, PIN_INPUT_PULLUP, 0) /* (B8) I2C2_SCL */
++			AM62LX_IOPAD(0x01e0, PIN_INPUT_PULLUP, 0) /* (D8) I2C2_SDA */
++		>;
++	};
++
++	bb_spi3_pins: bb-spi3-pins {
++		pinctrl-single,pins = <
++			AM62LX_IOPAD(0x00d0, PIN_OUTPUT, 5) /* (P22) SPI3_CLK */
++			AM62LX_IOPAD(0x00d4, PIN_INPUT, 5)  /* (N23) SPI3_D0 */
++			AM62LX_IOPAD(0x00d8, PIN_OUTPUT, 5) /* (N22) SPI3_D1 */
++			AM62LX_IOPAD(0x00cc, PIN_OUTPUT, 5) /* (P23) SPI3_CS0 */
++		>;
++	};
++};
++
++&gpio0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_others_gpio_pins>, <&bb_lora_pins>;
++};
++
++&wkup_gpio0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_wkup_gpio0_pins>;
++};
++
++&tscadc0 {
++	status = "okay";
++
++	adc {
++		ti,adc-channels = <0 1 2 3>;
++	};
++};
++
++&uart4 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_uart4_pins>;
++	status = "okay";
++};
++
++&uart5 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_uart5_pins>;
++	status = "okay";
++};
++
++&i2c0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_i2c0_pins>;
++	status = "okay";
++
++	eeprom@50 {
++		compatible = "atmel,24c32";
++		reg = <0x50>;
++	};
++
++	imu@6a {
++		compatible = "st,lsm6ds3tr-c";
++		reg = <0x6a>;
++	};
++};
++
++&i2c1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_i2c1_pins>;
++	status = "okay";
++};
++
++&i2c2 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_i2c2_pins>;
++	status = "okay";
++};
++
++&spi1 {
++	spidev@1 {
++		compatible = "rohm,dh2228fv";
++		reg = <1>;
++		spi-max-frequency = <12500000>;
++		symlink = "spi/1.1";
++	};
++};
++
++&spi3 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&bb_spi3_pins>;
++	status = "okay";
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	spidev@0 {
++		compatible = "rohm,dh2228fv";
++		reg = <0>;
++		spi-max-frequency = <12500000>;
++		symlink = "spi/3.0";
 +	};
 +};
 -- 
