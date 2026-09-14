@@ -1,18 +1,14 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Lesords <lesords168@gmail.com>
-Date: Mon, 14 Sep 2026 10:33:25 +0800
-Subject: [PATCH] arm64: dts: ti: BeagleBadge extras overlay v12 (add DSI
- display chain)
-
-Add the Raspberry Pi 7-inch touchscreen chain from the board dts:
-dss/dphy/dsi0 enabled with the tc358762 bridge and panel0, attiny
-display regulator and ft5406 touch on i2c1.
+Date: Mon, 14 Sep 2026 16:44:34 +0800
+Subject: [PATCH] arm64: dts: ti: BeagleBadge overlay v13 (RPi Touch Display 2
+ V2, direct panel)
 
 Signed-off-by: Lesords <lesords168@gmail.com>
 ---
  arch/arm64/boot/dts/ti/Makefile               |   2 +
- .../k3-am62l3-badge-beaglebadge-extras.dtso   | 620 ++++++++++++++++++
- 2 files changed, 622 insertions(+)
+ .../k3-am62l3-badge-beaglebadge-extras.dtso   | 600 ++++++++++++++++++
+ 2 files changed, 602 insertions(+)
  create mode 100644 arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
 
 diff --git a/arch/arm64/boot/dts/ti/Makefile b/arch/arm64/boot/dts/ti/Makefile
@@ -27,10 +23,10 @@ index cb26238..57a082e 100644
 +dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-beaglebadge-extras.dtbo
 diff --git a/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
 new file mode 100644
-index 0000000..74c7b3c
+index 0000000..66b33c3
 --- /dev/null
 +++ b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
-@@ -0,0 +1,620 @@
+@@ -0,0 +1,600 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * BeagleBadge board-extras overlay, applied on top of TI's reference
@@ -109,6 +105,21 @@ index 0000000..74c7b3c
 +	fragment@50 {
 +		target-path = "/";
 +		__overlay__ {
++
++		/* v14: panel power rail + backlight via MCU PWM (V2 display) */
++		bb_panel_reg_3v3: bb-panel-reg-3v3 {
++			compatible = "regulator-fixed";
++			regulator-name = "bb-panel-3v3";
++			regulator-min-microvolt = <3300000>;
++			regulator-max-microvolt = <3300000>;
++		};
++
++		bb_panel_backlight: bb-panel-backlight {
++			compatible = "pwm-backlight";
++			pwms = <&bb_display_mcu 0 1000000 0>;
++			brightness-levels = <0 32 64 96 128 160 192 224 255>;
++			default-brightness-level = <7>;
++		};
 +
 +		led-matrix {
 +		compatible = "gpio-leds";
@@ -351,6 +362,8 @@ index 0000000..74c7b3c
 +&i2c1 {
 +	pinctrl-names = "default";
 +	pinctrl-0 = <&bb_i2c1_pins>;
++	/* RPi 7" attiny is a slow I2C device; TI default 400kHz is too fast */
++	clock-frequency = <100000>;
 +	status = "okay";
 +};
 +
@@ -537,52 +550,25 @@ index 0000000..74c7b3c
 +	pinctrl-0 = <&ospi0_pins_default>, <&bb_ospi_rst_pins>, <&bb_ospi_int_pins>;
 +};
 +
-+/* ---- v12: DSI display chain (RPi 7" touchscreen), from the board dts ---- */
++/* ---- v13: DSI display chain (RPi Touch Display 2, V2 direct panel) ---- */
 +
 +&i2c1 {
-+	bb_display_reg: bb-display-reg@45 {
-+		compatible = "raspberrypi,7inch-touchscreen-panel-regulator";
++	bb_display_mcu: bb-display-mcu@45 {
++		compatible = "raspberrypi,touchscreen-panel-regulator-v2";
 +		reg = <0x45>;
 +		gpio-controller;
 +		#gpio-cells = <2>;
++		#pwm-cells = <3>;
 +	};
 +
-+	bb_touch: bb-touch@38 {
-+		compatible = "edt,edt-ft5406";
-+		reg = <0x38>;
-+		touchscreen-size-x = <800>;
-+		touchscreen-size-y = <480>;
-+		vcc-supply = <&bb_display_reg>;
-+		reset-gpio = <&bb_display_reg 1 1>;
-+		touchscreen-inverted-x;
-+		touchscreen-inverted-y;
-+	};
-+};
-+
-+/ {
-+	fragment@52 {
-+		target-path = "/";
-+		__overlay__ {
-+
-+		bb_bridge_reg: bb-bridge-regulator {
-+			compatible = "regulator-fixed";
-+			regulator-name = "bridge-reg";
-+			gpio = <&bb_display_reg 0 0>;
-+			vin-supply = <&bb_display_reg>;
-+			enable-active-high;
-+		};
-+
-+		bb_panel0: bb-panel0 {
-+			compatible = "raspberrypi,7inch-dsi", "simple-panel";
-+			backlight = <&bb_display_reg>;
-+			power-supply = <&bb_display_reg>;
-+			port {
-+				bb_panel_in: endpoint {
-+					remote-endpoint = <&bb_panel_bridge_out>;
-+				};
-+			};
-+		};
-+		};
++	bb_gt911: bb-gt911@5d {
++		compatible = "goodix,gt911";
++		reg = <0x5d>;
++		AVDD28-supply = <&bb_display_mcu>;
++		touchscreen-size-x = <720>;
++		touchscreen-size-y = <1280>;
++		touchscreen-x-mm = <90>;
++		touchscreen-y-mm = <151>;
 +	};
 +};
 +
@@ -615,7 +601,7 @@ index 0000000..74c7b3c
 +		port@0 {
 +			reg = <0>;
 +			bb_dsi0_out: endpoint {
-+				remote-endpoint = <&bb_panel_bridge_in>;
++				remote-endpoint = <&bb_panel_in_dsi>;
 +			};
 +		};
 +
@@ -627,26 +613,16 @@ index 0000000..74c7b3c
 +		};
 +	};
 +
-+	bridge@0 {
-+		compatible = "toshiba,tc358762";
++	bb_dsi_panel: bb-dsi-panel@0 {
 +		reg = <0>;
-+		vddc-supply = <&bb_bridge_reg>;
-+		ports {
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+
-+			port@0 {
-+				reg = <0>;
-+				bb_panel_bridge_in: endpoint {
-+					remote-endpoint = <&bb_dsi0_out>;
-+				};
-+			};
-+
-+			port@1 {
-+				reg = <1>;
-+				bb_panel_bridge_out: endpoint {
-+					remote-endpoint = <&bb_panel_in>;
-+				};
++		compatible = "raspberrypi,dsi-7inch", "ilitek,ili9881c";
++		power-supply = <&bb_panel_reg_3v3>;
++		reset-gpios = <&bb_display_mcu 0 GPIO_ACTIVE_LOW>;
++		backlight = <&bb_panel_backlight>;
++		rotation = <90>;
++		port {
++			bb_panel_in_dsi: endpoint {
++				remote-endpoint = <&bb_dsi0_out>;
 +			};
 +		};
 +	};
