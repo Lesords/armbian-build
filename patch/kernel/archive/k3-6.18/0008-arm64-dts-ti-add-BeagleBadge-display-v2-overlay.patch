@@ -1,0 +1,147 @@
+From d273406d2f8f5441b954e2dfd9f601acd36bc847 Mon Sep 17 00:00:00 2001
+From: Lesords <lesords168@gmail.com>
+Date: Mon, 14 Sep 2026 20:07:12 +0800
+Subject: [PATCH 3/3] arm64: dts: ti: add BeagleBadge display-v2 overlay
+
+Raspberry Pi Touch Display 2 via in-tree drivers: ili9881c DSI panel
+(raspberrypi,dsi-7inch), V2 MCU @0x45 regulator/GPIO/PWM and GT911
+touch. Default display for the factory image.
+---
+ arch/arm64/boot/dts/ti/Makefile               |   1 +
+ .../dts/ti/k3-am62l3-badge-display-v2.dtso    | 115 ++++++++++++++++++
+ 2 files changed, 116 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/ti/k3-am62l3-badge-display-v2.dtso
+
+diff --git a/arch/arm64/boot/dts/ti/Makefile b/arch/arm64/boot/dts/ti/Makefile
+index f338f39..e13ef96 100644
+--- a/arch/arm64/boot/dts/ti/Makefile
++++ b/arch/arm64/boot/dts/ti/Makefile
+@@ -593,3 +593,4 @@ DTC_FLAGS_k3-j742s2-evm += -@
+ 
+ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-beaglebadge-extras.dtbo
+ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-display-v1.dtbo
++dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-display-v2.dtbo
+diff --git a/arch/arm64/boot/dts/ti/k3-am62l3-badge-display-v2.dtso b/arch/arm64/boot/dts/ti/k3-am62l3-badge-display-v2.dtso
+new file mode 100644
+index 0000000..eadf4d2
+--- /dev/null
++++ b/arch/arm64/boot/dts/ti/k3-am62l3-badge-display-v2.dtso
+@@ -0,0 +1,115 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * BeagleBadge DSI display overlay — Raspberry Pi Touch Display 2 (V2):
++ *   ili9881c DSI panel (direct, via in-tree driver) + V2 MCU @0x45
++ *   (power/reset-GPIO/backlight-PWM) + GT911 touch @0x5d.
++ * Mutually exclusive with display-v1 (same I2C addr 0x45, same DSI link).
++ */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++
++/ {
++	fragment@50 {
++		target-path = "/";
++		__overlay__ {
++
++		/* v14: panel power rail + backlight via MCU PWM (V2 display) */
++		bb_panel_reg_3v3: bb-panel-reg-3v3 {
++			compatible = "regulator-fixed";
++			regulator-name = "bb-panel-3v3";
++			regulator-min-microvolt = <3300000>;
++			regulator-max-microvolt = <3300000>;
++		};
++
++		bb_panel_backlight: bb-panel-backlight {
++			compatible = "pwm-backlight";
++			pwms = <&bb_display_mcu 0 1000000 0>;
++			brightness-levels = <0 32 64 96 128 160 192 224 255>;
++			default-brightness-level = <7>;
++		};
++
++
++		};
++	};
++};
++
++/* ---- v13: DSI display chain (RPi Touch Display 2, V2 direct panel) ---- */
++
++&i2c1 {
++	bb_display_mcu: bb-display-mcu@45 {
++		compatible = "raspberrypi,touchscreen-panel-regulator-v2";
++		reg = <0x45>;
++		gpio-controller;
++		#gpio-cells = <2>;
++		#pwm-cells = <3>;
++	};
++
++	bb_gt911: bb-gt911@5d {
++		compatible = "goodix,gt911";
++		reg = <0x5d>;
++		AVDD28-supply = <&bb_display_mcu>;
++		touchscreen-size-x = <720>;
++		touchscreen-size-y = <1280>;
++		touchscreen-x-mm = <90>;
++		touchscreen-y-mm = <151>;
++	};
++};
++
++&dss {
++	status = "okay";
++};
++
++&dphy_tx0 {
++	status = "okay";
++};
++
++&dss_ports {
++	port@0 {
++		reg = <0>;
++		bb_dpi_out: endpoint {
++			remote-endpoint = <&bb_dsi0_in>;
++		};
++	};
++};
++
++&dsi0 {
++	status = "okay";
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	ports {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		port@0 {
++			reg = <0>;
++			bb_dsi0_out: endpoint {
++				remote-endpoint = <&bb_panel_in_dsi>;
++			};
++		};
++
++		port@1 {
++			reg = <1>;
++			bb_dsi0_in: endpoint {
++				remote-endpoint = <&bb_dpi_out>;
++			};
++		};
++	};
++
++	bb_dsi_panel: bb-dsi-panel@0 {
++		reg = <0>;
++		compatible = "raspberrypi,dsi-7inch", "ilitek,ili9881c";
++		power-supply = <&bb_panel_reg_3v3>;
++		reset-gpios = <&bb_display_mcu 0 GPIO_ACTIVE_LOW>;
++		backlight = <&bb_panel_backlight>;
++		rotation = <90>;
++		port {
++			bb_panel_in_dsi: endpoint {
++				remote-endpoint = <&bb_dsi0_out>;
++			};
++		};
++	};
++};
+-- 
+2.43.0
+

@@ -1,14 +1,16 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 4bb19d050754d0ef75ed292befcb6ba8ccb30038 Mon Sep 17 00:00:00 2001
 From: Lesords <lesords168@gmail.com>
-Date: Mon, 14 Sep 2026 16:44:34 +0800
-Subject: [PATCH] arm64: dts: ti: BeagleBadge overlay v13 (RPi Touch Display 2
- V2, direct panel)
+Date: Mon, 14 Sep 2026 20:07:11 +0800
+Subject: [PATCH 1/3] arm64: dts: ti: add BeagleBadge board-extras overlay
 
-Signed-off-by: Lesords <lesords168@gmail.com>
+Factory-test peripherals only (LED matrix/rgb, gpio-keys, pwm-gpio
+buzzer, mikrobus, test UART/I2C/ADC/SPI pinmux, e-paper spidev, OSPI
+1-1-1, WiFi power). Display-agnostic: the DSI chain lives in the
+mutually exclusive display-v1 / display-v2 overlays.
 ---
  arch/arm64/boot/dts/ti/Makefile               |   2 +
- .../k3-am62l3-badge-beaglebadge-extras.dtso   | 600 ++++++++++++++++++
- 2 files changed, 602 insertions(+)
+ .../k3-am62l3-badge-beaglebadge-extras.dtso   | 506 ++++++++++++++++++
+ 2 files changed, 508 insertions(+)
  create mode 100644 arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
 
 diff --git a/arch/arm64/boot/dts/ti/Makefile b/arch/arm64/boot/dts/ti/Makefile
@@ -23,22 +25,21 @@ index cb26238..57a082e 100644
 +dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-beaglebadge-extras.dtbo
 diff --git a/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
 new file mode 100644
-index 0000000..66b33c3
+index 0000000..4b0ee12
 --- /dev/null
 +++ b/arch/arm64/boot/dts/ti/k3-am62l3-badge-beaglebadge-extras.dtso
-@@ -0,0 +1,600 @@
+@@ -0,0 +1,506 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
-+ * BeagleBadge board-extras overlay, applied on top of TI's reference
-+ * k3-am62l3-badge.dtb:
++ * BeagleBadge factory-test overlay (display-agnostic):
 + *   - keep TI's proven SoC/baseline configuration untouched
 + *   - disable TI's multicolor LED (ecap2/ecap1/epwm1) and gpio-7-segment
 + *     digits (mcp23s18 GPIOs) to free the PWM channels and expander pins
-+ *   - add the factory-test devices: badge:matrix gpio-led digits, rgb:red/
-+ *     green/blue pwm-leds, gpio-keys, pwm-gpio buzzer, mikrobus pwm and the
-+ *     userspace e-paper spidev (chip select 0) with its control pins
-+ * Deliberately NOT included: watchdog / system-idle-states / thermal-zone
-+ * backports (idle-states is a boot-hang suspect) and the DSI chain.
++ *   - add the factory-test devices: badge:matrix gpio-led digits, rgb leds,
++ *     gpio-keys, pwm-gpio buzzer, mikrobus pwm, test UARTs/I2C/ADC/SPI and
++ *     the userspace e-paper spidev (chip select 0) with its control pins
++ * The DSI display chain lives in the display-v1 / display-v2 overlays
++ * (mutually exclusive with each other, independent from this one).
 + */
 +
 +/dts-v1/;
@@ -105,21 +106,6 @@ index 0000000..66b33c3
 +	fragment@50 {
 +		target-path = "/";
 +		__overlay__ {
-+
-+		/* v14: panel power rail + backlight via MCU PWM (V2 display) */
-+		bb_panel_reg_3v3: bb-panel-reg-3v3 {
-+			compatible = "regulator-fixed";
-+			regulator-name = "bb-panel-3v3";
-+			regulator-min-microvolt = <3300000>;
-+			regulator-max-microvolt = <3300000>;
-+		};
-+
-+		bb_panel_backlight: bb-panel-backlight {
-+			compatible = "pwm-backlight";
-+			pwms = <&bb_display_mcu 0 1000000 0>;
-+			brightness-levels = <0 32 64 96 128 160 192 224 255>;
-+			default-brightness-level = <7>;
-+		};
 +
 +		led-matrix {
 +		compatible = "gpio-leds";
@@ -548,84 +534,6 @@ index 0000000..66b33c3
 +
 +&ospi0 {
 +	pinctrl-0 = <&ospi0_pins_default>, <&bb_ospi_rst_pins>, <&bb_ospi_int_pins>;
-+};
-+
-+/* ---- v13: DSI display chain (RPi Touch Display 2, V2 direct panel) ---- */
-+
-+&i2c1 {
-+	bb_display_mcu: bb-display-mcu@45 {
-+		compatible = "raspberrypi,touchscreen-panel-regulator-v2";
-+		reg = <0x45>;
-+		gpio-controller;
-+		#gpio-cells = <2>;
-+		#pwm-cells = <3>;
-+	};
-+
-+	bb_gt911: bb-gt911@5d {
-+		compatible = "goodix,gt911";
-+		reg = <0x5d>;
-+		AVDD28-supply = <&bb_display_mcu>;
-+		touchscreen-size-x = <720>;
-+		touchscreen-size-y = <1280>;
-+		touchscreen-x-mm = <90>;
-+		touchscreen-y-mm = <151>;
-+	};
-+};
-+
-+&dss {
-+	status = "okay";
-+};
-+
-+&dphy_tx0 {
-+	status = "okay";
-+};
-+
-+&dss_ports {
-+	port@0 {
-+		reg = <0>;
-+		bb_dpi_out: endpoint {
-+			remote-endpoint = <&bb_dsi0_in>;
-+		};
-+	};
-+};
-+
-+&dsi0 {
-+	status = "okay";
-+	#address-cells = <1>;
-+	#size-cells = <0>;
-+
-+	ports {
-+		#address-cells = <1>;
-+		#size-cells = <0>;
-+
-+		port@0 {
-+			reg = <0>;
-+			bb_dsi0_out: endpoint {
-+				remote-endpoint = <&bb_panel_in_dsi>;
-+			};
-+		};
-+
-+		port@1 {
-+			reg = <1>;
-+			bb_dsi0_in: endpoint {
-+				remote-endpoint = <&bb_dpi_out>;
-+			};
-+		};
-+	};
-+
-+	bb_dsi_panel: bb-dsi-panel@0 {
-+		reg = <0>;
-+		compatible = "raspberrypi,dsi-7inch", "ilitek,ili9881c";
-+		power-supply = <&bb_panel_reg_3v3>;
-+		reset-gpios = <&bb_display_mcu 0 GPIO_ACTIVE_LOW>;
-+		backlight = <&bb_panel_backlight>;
-+		rotation = <90>;
-+		port {
-+			bb_panel_in_dsi: endpoint {
-+				remote-endpoint = <&bb_dsi0_out>;
-+			};
-+		};
-+	};
 +};
 -- 
 2.43.0
