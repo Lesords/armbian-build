@@ -3,7 +3,7 @@
 # 读取I2C总线1，设备0x55，寄存器0x08，16位无符号值转毫伏
 
 # 获取i2cget返回十六进制字符串（格式0xXXXX）
-raw_hex=$(i2cget -y 1 0x55 0x08 w)
+raw_hex=$(i2cget -y 0 0x55 0x08 w)
 # 剔除0x前缀
 hex_str=${raw_hex#0x}
 # 16位十六进制转十进制，范围0 ~ 65535(0xFFFF)
