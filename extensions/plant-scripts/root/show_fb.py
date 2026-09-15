@@ -7,11 +7,9 @@
   show_fb.py -t "FAIL" -c red -s 200
   show_fb.py -t "横屏" -r 90              顺时针旋转 90°（横装屏）
 
-前置: panel 需已"点火"（本次开机内跑过一次 modetest）:
-  setsid sh -c "sleep 3600 | modetest -M tidss -s 42@40:720x1280" >/dev/null 2>&1 &
-  sleep 2; pkill modetest
+panel 未"点火"时自动触发首次 modeset（约 2 秒），无需手动介入。
 """
-import sys, argparse
+import sys, argparse, glob, subprocess, time
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -27,7 +25,44 @@ def fb_size():
 
 FB_W, FB_H = fb_size()
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-# 依赖: python3-pil fonts-dejavu-core（固件 PACKAGE_LIST 已含）
+# 依赖: python3-pil fonts-dejavu-core libdrm-tests（固件 PACKAGE_LIST 已含）
+
+
+def ensure_awake():
+    """panel 的 DSI 初始化只在首次 atomic commit 时发送。
+    connector 尚未 enabled 时用 modetest 点火一次（V1/V2 自适应）。"""
+    for c in glob.glob("/sys/class/drm/card?-DSI-*"):
+        try:
+            if open(c + "/enabled").read().strip() == "enabled":
+                return
+        except OSError:
+            continue
+
+    def first_col(cmd, skip_until=""):
+        out = subprocess.run(cmd, capture_output=True, text=True).stdout
+        grab = not skip_until
+        for ln in out.splitlines():
+            if skip_until and ln.startswith(skip_until):
+                grab = True
+                continue
+            if grab:
+                f = ln.split()
+                if f and f[0].isdigit():
+                    return f[0]
+        return None
+
+    conn = first_col(["modetest", "-M", "tidss", "-c"])
+    crtc = first_col(["modetest", "-M", "tidss", "-p"], skip_until="CRTCs:")
+    if not conn or not crtc:
+        sys.exit("show_fb: cannot discover connector/crtc")
+    subprocess.Popen(
+        ['sh', "-c",
+         'sleep 3600 | modetest -M tidss -s %s@%s:%dx%d >/dev/null 2>&1'
+         % (conn, crtc, FB_W, FB_H)],
+        start_new_session=True)
+    time.sleep(2)
+    subprocess.run(["pkill", "-x", "modetest"])
+
 
 def flush(img):
     with open("/dev/fb0", "wb") as fb:
@@ -67,4 +102,5 @@ elif a.rotate == 180:
 elif a.rotate == 270:
     img = img.transpose(Image.Transpose.ROTATE_90)
 img = img.resize((FB_W, FB_H))
+ensure_awake()
 flush(img)
