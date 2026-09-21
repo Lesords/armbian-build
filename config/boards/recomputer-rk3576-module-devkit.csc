@@ -50,11 +50,15 @@ function pre_install_distribution_specific__recomputer_rk3576_install_libmali() 
 	display_alert "Mali GPU libraries installed successfully" "libmali-g52" "info"
 }
 
-# Install camera engine rkaiq for Rockchip ISP
+# Install camera engine rkaiq for Rockchip ISP.
+# Pinned to 1.0-1: the repo's newer 6.0x32.0-1 is ABI-incompatible with the
+# current 6.1.115 vendor kernel (rkaiq 3A server <-> rkisp ioctl ABI mismatch).
+# Revisit the pin when the kernel moves to a matching rkaiq SDK version.
 function pre_install_distribution_specific__recomputer_rk3576_install_camera_engine() {
 	display_alert "Installing camera engine from APT repo" "camera-engine-rkaiq" "info"
 
-	seeed_recomputer_install_from_apt camera-engine-rkaiq-rk3576
+	seeed_recomputer_install_from_apt "camera-engine-rkaiq-rk3576=1.0-1"
+	chroot_sdcard "apt-mark hold camera-engine-rkaiq-rk3576"
 
 	display_alert "Camera engine installed successfully" "camera-engine-rkaiq" "info"
 }
