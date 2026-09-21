@@ -266,6 +266,10 @@ function post_family_tweaks__recomputer_enable_usb_gadget_defaults() {
 	# serial-getty@ttyGS0: clear BindsTo=dev-ttyGS0.device from base unit
 	# (ttyGS0 is a USB gadget, not present at boot → BindsTo causes dependency failure).
 	# Keep Restart=always from base unit (not on-failure, else normal logout kills the getty).
+	# PrivateDevices is NOT used: the private /dev never gets ttyGS0 (DeviceAllow
+	# ineffective here), getty dies with ENOENT. agetty args are overridden to a
+	# plain -L call: the unit's default args (-o/-p/--keep-baud) segfault on
+	# gadget ttys with the current vendor kernel.
 	mkdir -p "${SDCARD}/etc/systemd/system/serial-getty@ttyGS0.service.d"
 	cat > "${SDCARD}/etc/systemd/system/serial-getty@ttyGS0.service.d/after-usbdevice.conf" <<- EOF
 		[Unit]
@@ -275,8 +279,11 @@ function post_family_tweaks__recomputer_enable_usb_gadget_defaults() {
 
 		[Service]
 		RestartSec=3
-		PrivateDevices=yes
-		DeviceAllow=/dev/ttyGS0 rw
+		ExecStart=
+		ExecStart=-/sbin/agetty -L 115200 ttyGS0 linux
+		TTYReset=no
+		TTYVHangup=no
+		TTYVTDisallocate=no
 	EOF
 
 	chroot_sdcard systemctl --no-reload enable usbdevice.service
