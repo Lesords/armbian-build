@@ -1,0 +1,26 @@
+From: Seeed Studio <techsupport@seeed.cc>
+Subject: [PATCH] pinctrl: rockchip: do not abort set_state on unresolvable pinconf phandle
+
+rockchip_pinctrl_set_state() muxes each pin first, then resolves the pin
+config phandle from the 4th cell of rockchip,pins. If it does not resolve,
+the loop returns -ENODEV and every remaining pin of the group is left
+unmuxed (i2c2m0_xfer = GPIO0_B7/C0: SDA stays GPIO, EEPROM/RTC dead).
+pinconf is optional: skip it for that pin and keep muxing the rest.
+
+diff -urN a/drivers/pinctrl/rockchip/pinctrl-rockchip-core.c b/drivers/pinctrl/rockchip/pinctrl-rockchip-core.c
+--- a/drivers/pinctrl/rockchip/pinctrl-rockchip-core.c	2026-09-21 19:38:39.326972318 +0800
++++ b/drivers/pinctrl/rockchip/pinctrl-rockchip-core.c	2026-09-21 19:38:39.351725726 +0800
+@@ -501,8 +501,11 @@
+ 			return ret;
+ 
+ 		node = ofnode_get_by_phandle(conf);
+-		if (!ofnode_valid(node))
+-			return -ENODEV;
++		if (!ofnode_valid(node)) {
++			debug("%s: bank %u pin %u: bad conf phandle 0x%x, skip pinconf\n",
++			      __func__, bank, pin, conf);
++			continue;
++		}
+ #if CONFIG_IS_ENABLED(OF_LIVE)
+ 		np = ofnode_to_np(node);
+ 		for (pp = np->properties; pp; pp = pp->next) {
