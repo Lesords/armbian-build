@@ -73,6 +73,7 @@ setenv eeprom_dtb_matched "no"
 #   0x00     6    magic        "rk35xx"  ASCII; blank (0xFF) chips never match
 #   0x06     4    board code   "01A0"    [0..1]=board no, [2..3]=hw iteration
 #   0x0A     ..   serial no.   ASCII     ignored by boot logic
+#   0x20     ..   extra cfg    ASCII     first entry = unit MAC (17 bytes)
 #
 # Board codes — actual EEPROM contents (first 10 bytes) per board:
 #   00A0 = RK3576 Devkit         72 6b 33 35 78 78 30 30 41 30  ("rk35xx"+"00A0")
@@ -136,37 +137,6 @@ fi
 
 if test "${eeprom_dtb_matched}" != "yes"; then
 	echo "No valid EEPROM information detected, using default DTB: ${fdtfile}"
-fi
-
-# Ethernet MAC from EEPROM: chip stores the bare MAC string at
-# eeprom_mac_offset (ASCII "xx:xx:xx:xx:xx:xx", default 18 bytes incl. "\n").
-# "ethaddr=" is assembled in memory before it so env import sets ethaddr.
-test -n "${eeprom_mac_offset}" || setenv eeprom_mac_offset 0x20
-test -n "${eeprom_mac_size}" || setenv eeprom_mac_size 0x12
-setexpr macbuf ${load_addr} + 8
-if i2c dev ${eeprom_i2c_bus}; then
-	if i2c read ${eeprom_i2c_addr} ${eeprom_mac_offset}.2 ${eeprom_mac_size} ${macbuf}; then
-		# Validate the whole 18-byte record: any blank byte (erased 0xFF
-		# or NUL) ANYWHERE means the region does not hold a usable MAC ->
-		# no prefix assembly, no import, ethaddr stays untouched.
-		setenv mac_bad 0
-		for i in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17; do
-			setexpr tmp ${macbuf} + ${i}
-			setexpr.b macb *${tmp}
-			if test "${macb}" = "0xff" || test "${macb}" = "0x0"; then
-				setenv mac_bad 1
-			fi
-		done
-		if test "${mac_bad}" = "0"; then
-			setexpr macsz ${eeprom_mac_size} + 8
-			mw.l ${load_addr} 0x61687465	# "etha" (little-endian word)
-			setexpr mactmp ${load_addr} + 4
-			mw.l ${mactmp} 0x3d726464	# "ddr="
-			if env import -t ${load_addr} ${macsz}; then
-				echo "MAC from EEPROM: ${ethaddr}"
-			fi
-		fi
-	fi
 fi
 
 echo "Using fdtfile=${fdtfile}"

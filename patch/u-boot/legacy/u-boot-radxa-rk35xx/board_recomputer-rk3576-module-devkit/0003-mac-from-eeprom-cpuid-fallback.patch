@@ -1,0 +1,44 @@
+From: Seeed Studio <techsupport@seeed.cc>
+Subject: [PATCH] rockchip: misc: read MAC from on-module EEPROM, fall back to cpuid
+
+The on-module EEPROM (I2C2, 0x50) holds the unit MAC as ASCII at offset
+0x20. Set it via env_set() so the built-in ethaddr format validation
+rejects blank or malformed records, and keep the cpuid-derived MAC as
+the fallback so ethaddr (write-once) always gets a stable value.
+
+diff -urN a/arch/arm/mach-rockchip/misc.c b/arch/arm/mach-rockchip/misc.c
+--- a/arch/arm/mach-rockchip/misc.c	2026-09-22 19:41:45.863375343 +0800
++++ b/arch/arm/mach-rockchip/misc.c	2026-09-22 19:41:45.885255215 +0800
+@@ -12,6 +12,7 @@
+ #include <common.h>
+ #include <dm.h>
+ #include <hash.h>
++#include <i2c.h>
+ #include <log.h>
+ #include <dm/uclass-internal.h>
+ #include <misc.h>
+@@ -36,6 +37,24 @@
+ 	int size = sizeof(hash);
+ 	u8 mac_addr[6];
+ 
++	/* Module EEPROM (bus 2, 0x50): unit MAC as ASCII at offset 0x20.
++	 * env_set() validates the format - blank/garbage falls through
++	 * to the cpuid-derived MAC below.
++	 */
++	{
++		struct udevice *eeprom;
++		char buf[18];
++
++		if (!i2c_get_chip_for_busnum(2, 0x50, 2, &eeprom) &&
++		    !dm_i2c_read(eeprom, 0x20, (u8 *)buf, 17)) {
++			buf[17] = '\0';
++			if (!env_set("ethaddr", buf)) {
++				printf("MAC from EEPROM: %s\n", buf);
++				return 0;
++			}
++		}
++	}
++
+ 	/* Only generate a MAC address, if none is set in the environment */
+ 	if (env_get("ethaddr"))
+ 		return 0;
